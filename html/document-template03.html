@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>{{docTitle}}</title>
+    <link rel="stylesheet" href="file://[tool-path]/css/template-body.css">
+    <!-- google font online -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,200;0,300;0,400;0,600;0,700;0,900;1,200;1,300;1,400;1,600;1,700&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <!-- <img src="file://[tool-path]/imgs/Logo HTL Wien West.png" class="htl-logo"> -->
+    <div class="content">{{{markdownHtml}}}</div>
+
+    {{#showAdditionalInfo}}
+    <div style="page-break-before: always; text-align: left; margin-top: 50px">
+      <h2>Zusätzliche Informationen</h2>
+      <p>Dieses Dokument wurde am **{{generationDate}}** erstellt.</p>
+      <p>Status: **{{status}}**</p>
+      {{#revisionHistory}}
+      <h3>Revisionsverlauf</h3>
+      <ul>
+        {{#.}}
+        <li>**Version {{version}}**: {{description}} (Datum: {{date}})</li>
+        {{/.}}
+      </ul>
+      {{/revisionHistory}}
+    </div>
+    {{/showAdditionalInfo}}
+  </body>
+</html>
