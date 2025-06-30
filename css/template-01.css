@@ -1,0 +1,73 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+.content {
+  /* Dieser Padding wird durch die Margins der PDF-Generierung überlagert, */
+  /* kann aber für interne Abstände nützlich sein, wenn man keine festen Ränder im PDF hat */
+  padding: 0; /* Setze auf 0, da Margins im PDF definiert werden */
+}
+/* Basisches Styling für Markdown-Elemente */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: 'Georgia', serif;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+h1 {
+  font-size: 2em;
+}
+h2 {
+  font-size: 1.5em;
+}
+h3 {
+  font-size: 1.2em;
+}
+p {
+  margin-bottom: 1em;
+  line-height: 1.5;
+}
+ul,
+ol {
+  margin-left: 20px;
+  margin-bottom: 1em;
+}
+pre {
+  background-color: #f4f4f4;
+  padding: 10px;
+  border-radius: 5px;
+  overflow-x: auto; /* Für lange Codezeilen */
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.9em;
+  white-space: pre-wrap; /* Codeumbrüche erlauben, wenn nötig */
+  word-wrap: break-word;
+}
+code {
+  font-family: 'Courier New', Courier, monospace;
+  background-color: #e0e0e0;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+blockquote {
+  border-left: 4px solid #ccc;
+  padding-left: 1em;
+  margin-left: 0;
+  color: #666;
+}
+hr {
+  border: 0;
+  border-top: 1px solid #ccc;
+  margin: 1em 0;
+}
+a {
+  color: #007bff;
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
