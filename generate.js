@@ -56,22 +56,29 @@ md.use(mark); // "VuePress Theme Hope is ==powerful==."
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const toolpath = path.join(__dirname, 'html'); // global
-
 // --- filename from  ---
 const argv = process.argv;
-console.log(argv[2]);
+console.log(`Template used: ${argv[2]}`);
+console.log(`Markdown used: ${argv[3]}`);
 
-const markdownFile = argv[2];
+const templateFile = argv[2];
+const markdownFile = argv[3];
 
-if (!fs.existsSync(markdownFile)) {
-  console.error('You need to specify a markdown file with full path.');
-  console.error(`call ${argv[1]} [md-file] {|body|withTitle}`);
+if (!fs.existsSync(templateFile)) {
+  console.error('You need to specify a template file with full path.');
+  console.error(`call ${argv[1]} [template-file] [md-file] {|body|withTitle}`);
 
   process.exit(-1);
 }
 
-let mode = argv[3];
+if (!fs.existsSync(markdownFile)) {
+  console.error('You need to specify a markdown file with full path.');
+  console.error(`call ${argv[1]} [template-file] [md-file] {|body|withTitle}`);
+
+  process.exit(-1);
+}
+
+let mode = argv[4];
 if (!mode) {
   mode = 'body';
 }
@@ -79,52 +86,54 @@ if (!mode) {
 const mdPathParts = path.parse(markdownFile);
 const markdownPath = path.join(mdPathParts.dir); // GLOBAL
 
+const templParts = path.parse(templateFile);
+const toolpath = path.join(templParts.dir); // global
+
 const dataFile = path.join(markdownPath, 'data.mjs');
 
 let data = {};
 if (fs.existsSync(dataFile)) {
   const impFileName = 'file://' + dataFile.replace(/\\/g, '/');
-  console.log(`importing from ${impFileName}`);
+  console.log(`Importing metadata from ${impFileName}`);
 
   data = await import(impFileName);
-  console.log(data.default);
+  // console.log(data.default);
+  data = data.default;
+}
+
+// collect SVG content
+const svgLoader = [];
+for (const d of Object.keys(data)) {
+  if (d.endsWith('SVGContent')) {
+    svgLoader.push({ name: d, file: data[d] });
+  }
+}
+
+// read SVG content
+console.log('Reading SVG Content');
+console.log(svgLoader);
+const svgContent = {};
+for (const s of svgLoader) {
+  const svgPath = path.join(toolpath, s.file);
+  svgContent[s.name] = fs.readFileSync(svgPath).toString('utf-8');
 }
 
 // Beispiel Datenobjekt für das Mustache-Template
 const documentData = {
   docTitle: 'tempTitle', // should be replaced by data.mjs
   tempHTMLFile: 'temp',
-  ...data.default,
+  topMargin: '20mm', // default
+  bottomMargin: '25mm', // default
+  leftMargin: '20mm', // default
+  rightMargin: '20mm', // default
+  ...data,
   // read logo svg to embed in header
-  logoContent: fs.readFileSync('html/imgs/Logo HTL Wien West2.svg').toString('utf-8'),
+  // logoContent: fs.readFileSync('html/imgs/Logo HTL Wien West2.svg').toString('utf-8'),
+  ...svgContent,
   currentDate: `${new Date().toLocaleDateString('de-DE')}`,
-
-  //   docTitle: 'Pädagogisches Konzept Kooperation und Konkurrenz',
-  // NOT USED
-  /*
-  showAdditionalInfo: false,
-  generationDate: new Date().toLocaleDateString('de-DE', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  }),
-
-  status: 'Final',
-
-  //   titleHeader: 'Pädagogisches Konzept SEW+WEBT 5JG',
-  //   authorHeader: 'Thomas Psik',
-  revisionHistory: [
-    { version: '1.0', description: 'Initialer Entwurf', date: '2025-01-15' },
-    { version: '1.1', description: 'Ergebnisse hinzugefügt', date: '2025-03-01' },
-    { version: '1.2', description: 'Abschließende Überarbeitung', date: '2025-06-10' },
-  ],
-  // Daten, die an Puppeteer's headerTemplate und footerTemplate übergeben werden können
-  // Beachte: Diese sind separate Templates und können nicht direkt auf die Mustache-Daten zugreifen,
-  // es sei denn, du injizierst sie als globalen JS-Variable oder renderst den Header/Footer ebenfalls mit Mustache.
-  // Für das Beispiel hier, ein statischer Wert, der nur für Puppeteer's Template ist.
-  titleFromPuppeteer: 'Quartalsbericht',
-  */
 };
+
+// console.log(documentData);
 
 const titleTemplateFile = path.join(toolpath, 'document-template-title.html'); // GLOBAL
 const bodyTemplateFile = path.join(toolpath, 'document-template-body.html'); // GLOBAL
@@ -140,11 +149,13 @@ if (mode === 'withTitle') {
   // create title pdf
   const titlePDFPath = path.join(markdownPath, 'tempTitle' + '.pdf');
   documentData.tempHTMLFile = 'title';
+  console.log('Generating tempTitle.pdf ...');
   await generatePdfFromFileUrl(markdownFileTitle, markdownPath, titleTemplateFile, titlePDFPath, documentData);
 
   // create body pdf
   const bodyPDFPath = path.join(markdownPath, 'tempBody' + '.pdf');
   documentData.tempHTMLFile = 'body';
+  console.log('Generating tempBody.pdf ...');
   await generatePdfFromFileUrl(markdownFile, markdownPath, bodyTemplateFile, bodyPDFPath, documentData);
 
   // merge title+body pdf
@@ -152,8 +163,10 @@ if (mode === 'withTitle') {
   await mergePdfs(titlePDFPath, bodyPDFPath, finalPDFPath);
 
   // cleanup temp files
-  // fs.unlinkSync(titlePDFPath); // Temporäre Datei aufräumen
-  // fs.unlinkSync(bodyPDFPath); // Temporäre Datei aufräumen
+  if (!data.debug) {
+    fs.unlinkSync(titlePDFPath); // Temporäre Datei aufräumen
+    fs.unlinkSync(bodyPDFPath); // Temporäre Datei aufräumen
+  }
 } else if (mode === 'body') {
   const outputPdfPath = path.join(markdownPath, documentData.docTitle + '.pdf');
   await generatePdfFromFileUrl(markdownFile, markdownPath, bodyTemplateFile, outputPdfPath, documentData);
@@ -189,7 +202,7 @@ async function generatePdfFromFileUrl(markdownFilePath, markdownPath, templateFi
   const fullHtml = Mustache.render(htmlTemplate, templateData);
 
   const htmlContentFull = fullHtml.replaceAll(
-    'file://[tool-path]', // Ersetze den relativen Pfad
+    'file://[template-path]', // Ersetze den relativen Pfad
     `file://${toolpath.replace(/\\/g, '/')}`, // Durch den absoluten file:// Pfad (Windows-Pfade umwandeln)
   );
 
@@ -230,15 +243,18 @@ async function generatePdfFromFileUrl(markdownFilePath, markdownPath, templateFi
     headerTemplate, // could be empty
     footerTemplate, // could be empty
     margin: {
-      top: '20mm',
-      bottom: '25mm',
-      left: '20mm',
-      right: '20mm',
+      top: data.topMargin,
+      bottom: data.bottomMargin,
+      left: data.leftMargin,
+      right: data.rightMargin,
     },
   });
   await browser.close();
 
-  //   fs.unlinkSync(tempHtmlPath); // Temporäre Datei aufräumen
+  if (!data.debug) {
+    fs.unlinkSync(tempHtmlPath); // Temporäre Datei aufräumen
+  }
+
   console.log(`PDF ${outputPath} erstellt!`);
 }
 
