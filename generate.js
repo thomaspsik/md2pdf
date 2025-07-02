@@ -37,16 +37,16 @@ md.use(mdTOC);
 md.use(embed, {
   config: [
     // mandatory
-    //   {
-    //     name: 'youtube',
-    //     setup: (id) =>
-    //       `<iframe width="560" height="315" src="https://www.youtube.com/embed/${id}" frameborder="0" allowfullscreen></iframe>`,
-    //   },
-    //   {
-    //     name: 'icon',
-    //     allowInline: true,
-    //     setup: (name) => `<i class="icon icon-${name}"></i>`,
-    //   },
+    {
+      name: 'youtube',
+      setup: (id) =>
+        `<iframe width="560" height="315" src="https://www.youtube.com/embed/${id}" frameborder="0" allowfullscreen></iframe>`,
+    },
+    {
+      name: 'icon',
+      allowInline: true,
+      setup: (name) => `<i class="icon icon-${name}"></i>`,
+    },
   ],
 });
 // usage: {% youtube dQw4w9WgXcQ %}
@@ -56,15 +56,10 @@ md.use(mark); // "VuePress Theme Hope is ==powerful==."
 
 // Global Variables
 
-// __filename Äquivalent
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 // --- filename from  ---
 const argv = process.argv;
 
 const dataFile = argv[2]; // new paradigm // GLOBAL VARIABLE!!!
-// const dataFile = path.join(markdownPath, 'data.mjs');
 
 let data = {};
 if (!fs.existsSync(dataFile)) {
@@ -161,24 +156,24 @@ if (docParts.length === 0) {
     start = finalPDFPath;
   }
 }
-console.log(`Wrote file ${finalPDFPath}.`);
+console.log(`Processing file ${finalPDFPath} finished.`);
 
 // this is really annoing -> joining holds a lock on the files after returning to javascript
 // have to manually loop and wait for the task to release the temp files so they can be deleted.
 
 if (!data.debug) {
-  let waitForJoin = 5; // max 10 seconds
+  let waitForJoin = 5; // max 5*2 seconds
   while (waitForJoin > 0) {
     try {
       let trys = 0;
       if (fs.existsSync(first.partPDFPath)) {
         trys++;
-        fs.unlinkSync(first.partPDFPath); // Temporäre Datei aufräumen
+        fs.unlinkSync(first.partPDFPath); // remove file
       }
-      for (const docP of docParts) {
+      for (const docP of docParts) { // loop through other files
         if (fs.existsSync(docP.partPDFPath)) {
           trys++;
-          fs.unlinkSync(docP.partPDFPath); // Temporäre Datei aufräumen
+          fs.unlinkSync(docP.partPDFPath); // remove file
         }
       }
       if (trys === 0) {
@@ -281,14 +276,11 @@ function checkTemplateByName(docPart, part, mandatoryFlag) {
 }
 
 /**
- *
- * @param {*} markdownFilePath
- * @param {*} markdownPath
- * @param {*} templateFilePath
- * @param {*} outputPath
- * @param {*} data
+ * generatePdfFromDocPart performs the generation of the temporary pdf file for the part of the document
+ * 
+ * @param {*} docP document part with markdown and html templates
+ * @param {*} docData data for mustache and global settings
  */
-
 async function generatePdfFromDocPart(docP, docData) {
   const markdownPathParts = path.parse(docP.markdownFile);
   const markdownPath = markdownPathParts.dir;
@@ -359,6 +351,7 @@ async function generatePdfFromDocPart(docP, docData) {
   // Navigiere zur temporären lokalen HTML-Datei
   await page.goto(`file://${partHTMLPath}`, { waitUntil: 'networkidle0' });
 
+  // call "pdf" to generate a pdf with puppeteer
   await page.pdf({
     path: partPDFPath,
     format: 'A4',
@@ -373,13 +366,14 @@ async function generatePdfFromDocPart(docP, docData) {
       right: docData.rightMargin,
     },
   });
+  // close headless browser
   await browser.close();
 
   if (!docData.debug) {
-    fs.unlinkSync(partHTMLPath); // Temporäre Datei aufräumen
+    fs.unlinkSync(partHTMLPath); // remove temporary html
   }
   docP.partPDFPath = partPDFPath; // store in docPart
-  console.log(`PDF ${partPDFPath} erstellt!`);
+  console.log(`PDF ${partPDFPath} saved.`);
 }
 
 /*
