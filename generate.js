@@ -1,13 +1,15 @@
+import fs from 'fs';
+import path from 'path';
+
+// main libraries
 import puppeteer from 'puppeteer';
 import MarkdownIt from 'markdown-it'; // Importiere markdown-it
 import Mustache from 'mustache'; // Mustache importieren
-import fs from 'fs';
-import path from 'path';
 
 // markdown-it plugins
 // https://mdit-plugins.github.io/
 import { attrs } from '@mdit/plugin-attrs';
-import { legacyImgSize, imgSize, obsidianImgSize } from '@mdit/plugin-img-size';
+import { legacyImgSize, imgSize, obsidianImgSize } from '@mdit/plugin-img-size'; // legacyImgSize is not used
 import { embed } from '@mdit/plugin-embed';
 import { mark } from '@mdit/plugin-mark';
 
@@ -26,6 +28,8 @@ import muhammara from 'muhammara';
 const md = new MarkdownIt({ html: true }); // for comments
 md.use(imgSize);
 md.use(obsidianImgSize);
+// md.use(legacyImgSize); // disabled for no particular reason - just because legacy does not sound fresh :)
+
 md.use(attrs);
 md.use(mdAnchor);
 md.use(mdTOC);
@@ -58,204 +62,324 @@ const __dirname = path.dirname(__filename);
 
 // --- filename from  ---
 const argv = process.argv;
-console.log(`Template used: ${argv[2]}`);
-console.log(`Markdown used: ${argv[3]}`);
 
-const templateFile = argv[2];
-const markdownFile = argv[3];
-
-if (!fs.existsSync(templateFile)) {
-  console.error('You need to specify a template file with full path.');
-  console.error(`call ${argv[1]} [template-file] [md-file] {|body|withTitle}`);
-
-  process.exit(-1);
-}
-
-if (!fs.existsSync(markdownFile)) {
-  console.error('You need to specify a markdown file with full path.');
-  console.error(`call ${argv[1]} [template-file] [md-file] {|body|withTitle}`);
-
-  process.exit(-1);
-}
-
-let mode = argv[4];
-if (!mode) {
-  mode = 'body';
-}
-
-const mdPathParts = path.parse(markdownFile);
-const markdownPath = path.join(mdPathParts.dir); // GLOBAL
-
-const templParts = path.parse(templateFile);
-const toolpath = path.join(templParts.dir); // global
-
-const dataFile = path.join(markdownPath, 'data.mjs');
+const dataFile = argv[2]; // new paradigm // GLOBAL VARIABLE!!!
+// const dataFile = path.join(markdownPath, 'data.mjs');
 
 let data = {};
-if (fs.existsSync(dataFile)) {
-  const impFileName = 'file://' + dataFile.replace(/\\/g, '/');
-  console.log(`Importing metadata from ${impFileName}`);
-
-  data = await import(impFileName);
-  // console.log(data.default);
-  data = data.default;
+if (!fs.existsSync(dataFile)) {
+  console.error('You need to specify an existing data file with full path.');
+  console.error(`call ${argv[1]} [data-file]`);
+  process.exit(-1);
 }
 
-// collect SVG content
-const svgLoader = [];
-for (const d of Object.keys(data)) {
-  if (d.endsWith('SVGContent')) {
-    svgLoader.push({ name: d, file: data[d] });
+const fulldataFilePath = fs.realpathSync(dataFile);
+
+const impFileName = 'file://' + fulldataFilePath;
+console.log(`Importing metadata from ${impFileName}`);
+const dataFilePath = path.parse(fulldataFilePath).dir; // dir part of the data file // GLOBAL VARIABLE !!!
+
+data = await import(impFileName);
+// console.log(data.default);
+data = data.default; // extract "default" data structure. This allows for javascript to be performed in the data.mjs file
+
+/// collect SVG content
+const svgContent = {};
+const svgContentList = data.SVGContents;
+
+if (!!svgContentList && typeof svgContentList === 'object') {
+  const svgLoader = [];
+  for (const svg of Object.keys(svgContentList)) {
+    svgLoader.push({ name: svg, file: svgContentList[svg] });
+  }
+
+  // read SVG content
+  console.log(`Reading ${svgLoader.length} SVG Content`);
+  for (const s of svgLoader) {
+    let svgPath = s.file; // absolute path
+    if (!path.isAbsolute(svgPath)) {
+      svgPath = path.join(dataFilePath, s.file); // try relative path
+    }
+    if (!fs.existsSync(svgPath)) {
+      console.log(`Warning: Could not read svg file [${svgPath}] specified in [${fulldataFilePath}].`);
+    }
+    svgContent[s.name] = fs.readFileSync(svgPath).toString('utf-8');
   }
 }
 
-// read SVG content
-console.log('Reading SVG Content');
-console.log(svgLoader);
-const svgContent = {};
-for (const s of svgLoader) {
-  const svgPath = path.join(toolpath, s.file);
-  svgContent[s.name] = fs.readFileSync(svgPath).toString('utf-8');
-}
-
-// Beispiel Datenobjekt für das Mustache-Template
-const documentData = {
+// default data for Mustache-Template
+const docData = {
   docTitle: 'tempTitle', // should be replaced by data.mjs
-  tempHTMLFile: 'temp',
+  filesPrefix: 'temp',
   topMargin: '20mm', // default
   bottomMargin: '25mm', // default
   leftMargin: '20mm', // default
   rightMargin: '20mm', // default
   ...data,
   // read logo svg to embed in header
-  // logoContent: fs.readFileSync('html/imgs/Logo HTL Wien West2.svg').toString('utf-8'),
   ...svgContent,
   currentDate: `${new Date().toLocaleDateString('de-DE')}`,
 };
 
-// console.log(documentData);
-
-const titleTemplateFile = path.join(toolpath, 'document-template-title.html'); // GLOBAL
-const bodyTemplateFile = path.join(toolpath, 'document-template-body.html'); // GLOBAL
-
-if (mode === 'withTitle') {
-  // try read title md file
-  const markdownFileTitle = path.join(markdownPath, 'title.md');
-  if (!fs.existsSync(markdownFileTitle)) {
-    console.error(`Title markdown file ${markdownFileTitle} missing.`);
-    process.exit(-1);
-  }
-
-  // create title pdf
-  const titlePDFPath = path.join(markdownPath, 'tempTitle' + '.pdf');
-  documentData.tempHTMLFile = 'title';
-  console.log('Generating tempTitle.pdf ...');
-  await generatePdfFromFileUrl(markdownFileTitle, markdownPath, titleTemplateFile, titlePDFPath, documentData);
-
-  // create body pdf
-  const bodyPDFPath = path.join(markdownPath, 'tempBody' + '.pdf');
-  documentData.tempHTMLFile = 'body';
-  console.log('Generating tempBody.pdf ...');
-  await generatePdfFromFileUrl(markdownFile, markdownPath, bodyTemplateFile, bodyPDFPath, documentData);
-
-  // merge title+body pdf
-  const finalPDFPath = path.join(markdownPath, documentData.docTitle + '.pdf');
-  await mergePdfs(titlePDFPath, bodyPDFPath, finalPDFPath);
-
-  // cleanup temp files
-  if (!data.debug) {
-    fs.unlinkSync(titlePDFPath); // Temporäre Datei aufräumen
-    fs.unlinkSync(bodyPDFPath); // Temporäre Datei aufräumen
-  }
-} else if (mode === 'body') {
-  const outputPdfPath = path.join(markdownPath, documentData.docTitle + '.pdf');
-  await generatePdfFromFileUrl(markdownFile, markdownPath, bodyTemplateFile, outputPdfPath, documentData);
-} else {
-  console.error(`Mode ${mode} not supported.`);
-  process.exit(-1);
+const docParts = data.docParts;
+if (
+  !docParts ||
+  docParts.length < 1 ||
+  typeof docParts[0].markdownFile != 'string' ||
+  typeof docParts[0].content != 'string'
+) {
+  console.error(`You need to specify atlease one docPart in the data [${dataFile}] with markdownFile and content.`);
+  console.error(
+    `   export default { ..., docParts:[ {markdownFile: "testBody.md", content: "./document-template-body.html"}] `,
+  );
+  process.exit(-2);
 }
 
-async function generatePdfFromFileUrl(markdownFilePath, markdownPath, templateFilePath, outputPath, data) {
+// loop through templates and create temporary pdfs
+console.log(`Number of document parts: ${docParts.length}`);
+
+for (const docP of docParts) {
+  checkMarkdown(docP); // make sure that the markdown file exists
+  checkTemplates(docP); // make sure that the template files exists
+
+  await generatePdfFromDocPart(docP, docData);
+}
+console.log('Merging document parts ...');
+
+// done generating all parts -> join them
+const finalPDFPath = path.join(dataFilePath, docData.docTitle + '.pdf');
+const first = docParts.shift(); // get first and remove
+
+if (docParts.length === 0) {
+  // only 1 pdf -> just move temp to final
+  fs.renameSync(first.partPDFPath, finalPDFPath);
+} else {
+  let start = first.partPDFPath;
+  for (const docP of docParts) {
+    await mergePdfs(start, docP.partPDFPath, finalPDFPath);
+    // cleanup temp files
+    start = finalPDFPath;
+  }
+}
+console.log(`Wrote file ${finalPDFPath}.`);
+
+// this is really annoing -> joining holds a lock on the files after returning to javascript
+// have to manually loop and wait for the task to release the temp files so they can be deleted.
+
+if (!data.debug) {
+  let waitForJoin = 5; // max 10 seconds
+  while (waitForJoin > 0) {
+    try {
+      let trys = 0;
+      if (fs.existsSync(first.partPDFPath)) {
+        trys++;
+        fs.unlinkSync(first.partPDFPath); // Temporäre Datei aufräumen
+      }
+      for (const docP of docParts) {
+        if (fs.existsSync(docP.partPDFPath)) {
+          trys++;
+          fs.unlinkSync(docP.partPDFPath); // Temporäre Datei aufräumen
+        }
+      }
+      if (trys === 0) {
+        break; // all have been deleted
+      }
+    } catch (e) {
+      waitForJoin--;
+      // wait 1 sec
+      console.log('Waiting for 2 seconds for join to finish...');
+      await new Promise((r) => setTimeout(r, 2000));
+      // try again ...
+    }
+  }
+  if (waitForJoin <= 0) {
+    console.log('WARNING: Temporary files could not be removed.');
+  }
+}
+
+console.log(`Done.`);
+process.exit(0);
+
+/**
+ * check if markdown file exists (absolute path or relative to the data file)
+ * @param {*} docPart defintion of this part of the document
+ * @returns
+ */
+function checkMarkdown(docPart) {
+  let markdownFile = docPart.markdownFile;
+
+  if (!markdownFile) {
+    console.error(`You need to specify a markdownFile in the data file [${dataFile}].`);
+    console.error(`   export default {markdownFile: "./test.md", ...} `);
+
+    process.exit(-2);
+  }
+
+  if (!path.isAbsolute(markdownFile)) {
+    markdownFile = path.join(dataFilePath, markdownFile);
+  }
+
+  if (!fs.existsSync(markdownFile)) {
+    console.error(`You need to specify an existing markdownFile in the data file [${dataFile}].`);
+    console.error(`Could not find [${markdownFile}].`);
+    console.error(`   export default {markdownFile: "./test.md", ...} `);
+
+    process.exit(-2);
+  }
+
+  console.log(`Markdown used: ${markdownFile}`);
+  docPart.markdownFile = markdownFile; // set file
+  return markdownFile;
+}
+
+/**
+ *
+ * @param {*} docPart
+ */
+function checkTemplates(docPart) {
+  checkTemplateByName(docPart, 'content', true); // mandatory
+  checkTemplateByName(docPart, 'header', false); // optional
+  checkTemplateByName(docPart, 'footer', false); // optional
+}
+/**
+ *
+ * @param {*} docPart
+ * @param {*} part
+ * @param {*} mandatoryFlag
+ * @returns
+ */
+function checkTemplateByName(docPart, part, mandatoryFlag) {
+  let file = docPart[part];
+  if (mandatoryFlag) {
+    if (!file || typeof file != 'string') {
+      console.error(`You must specify a ${part} in the data file [${dataFile}].`);
+      console.error(`Could not read property ${part} in:`);
+      console.error(JSON.stringify(docPart));
+      process.exit(-5);
+    }
+  } else {
+    if (!file) {
+      // no need to check
+      return;
+    }
+  }
+
+  if (!path.isAbsolute(file)) {
+    file = path.join(dataFilePath, file);
+  }
+
+  if (!fs.existsSync(file)) {
+    console.error(`You need to specify an existing template file in the data file [${dataFile}].`);
+    console.error(`Could not find [${file}].`);
+
+    process.exit(-2);
+  }
+
+  console.log(`Templated used: ${file}`);
+
+  docPart[part] = file; // write back
+}
+
+/**
+ *
+ * @param {*} markdownFilePath
+ * @param {*} markdownPath
+ * @param {*} templateFilePath
+ * @param {*} outputPath
+ * @param {*} data
+ */
+
+async function generatePdfFromDocPart(docP, docData) {
+  const markdownPathParts = path.parse(docP.markdownFile);
+  const markdownPath = markdownPathParts.dir;
+
+  // create 2 temporary file names -> html and pdf
+  const tempFileName = docData.filesPrefix + markdownPathParts.name;
+  const partHTMLPath = path.join(markdownPath, tempFileName + '.html');
+  const partPDFPath = path.join(markdownPath, tempFileName + '.pdf');
+
+  console.log(`Generating ${partPDFPath} ..`);
+
   // Pfad zur HTML-Datei
+  const markdownFilePath = docP.markdownFile;
   const markdownContent = fs.readFileSync(markdownFilePath, 'utf8');
-  //   console.log(markdownFilePath);
-  //   console.log(markdownContent);
 
-  const markdownHtml = md.render(markdownContent); // Markdown zu HTML konvertieren
+  const markdownHtml = md.render(markdownContent); // convert Markdown to HTML
+  // console.log(markdownHtml);
 
-  //   const htmlFilePath = path.join(__dirname, 'public', 'index.html'); // Annahme: public/index.html existiert
-  // Pfad zum Bild (muss ABSOLUT sein in der HTML-Datei, oder du musst sehr vorsichtig sein)
-  // const absoluteImagePath = path.join(__dirname, 'public', 'bilder', 'meinbild.jpg');
-
-  // HTML-Inhalt anpassen, um absolute file:// Pfade zu verwenden
-  // let htmlContent = fs.readFileSync(htmlFilePath, 'utf8');
-
+  const templateFilePath = docP.content;
   const htmlTemplate = fs.readFileSync(templateFilePath, 'utf8'); // HTML-Template laden
 
   // Datenobjekt für Mustache um den Markdown-HTML-Inhalt erweitern
   const templateData = {
     markdownHtml, // Der konvertierte Markdown-HTML-Inhalt
-    ...data, // Zusätzliche dynamische Daten aus dem Aufruf
+    ...docData, // Zusätzliche dynamische Daten aus dem Aufruf
   };
 
   // Mustache-Template mit den Daten rendern
   const fullHtml = Mustache.render(htmlTemplate, templateData);
 
+  const htmlTemplatePath = path.parse(templateFilePath).dir;
+  const replacePath = htmlTemplatePath.replace(/\\/g, '/');
+  // console.log(replacePath);
+
+  // replace placeholder for full path
   const htmlContentFull = fullHtml.replaceAll(
     'file://[template-path]', // Ersetze den relativen Pfad
-    `file://${toolpath.replace(/\\/g, '/')}`, // Durch den absoluten file:// Pfad (Windows-Pfade umwandeln)
+    `file://${replacePath}`, // Durch den absoluten file:// Pfad (Windows-Pfade umwandeln)
   );
 
-  // generate header with Mustache
-  const headerFile = templateFilePath + '.header.html';
+  // console.log(htmlContentFull);
+
+  // Eine temporäre HTML-Datei erstellen, um den aktualisierten Inhalt zu laden
+  fs.writeFileSync(partHTMLPath, htmlContentFull);
+
+  // generate header with Mustache if present
   let headerTemplate = undefined;
-  if (fs.existsSync(headerFile)) {
-    const headerTemplateHtml = fs.readFileSync(headerFile, 'utf8'); // HTML-Template laden
+  if (docP.header) {
+    const headerTemplateHtml = fs.readFileSync(docP.header, 'utf8'); // HTML-Template laden
     headerTemplate = Mustache.render(headerTemplateHtml, templateData);
-    console.log(`Rendered header template for ${outputPath}.`);
+    console.log(`Rendered header template for ${partPDFPath}.`);
   }
 
-  const footerFile = templateFilePath + '.footer.html';
+  // generate footer with Mustache if present
   let footerTemplate = undefined;
-  if (fs.existsSync(footerFile)) {
-    const footerTemplateHtml = fs.readFileSync(footerFile, 'utf8'); // HTML-Template laden
+  if (docP.footer) {
+    const footerTemplateHtml = fs.readFileSync(docP.footer, 'utf8'); // HTML-Template laden
     footerTemplate = Mustache.render(footerTemplateHtml, templateData);
-    console.log(`Rendered footer template for ${outputPath}.`);
+    console.log(`Rendered footer template for ${partPDFPath}.`);
   }
-  // Eine temporäre HTML-Datei erstellen, um den aktualisierten Inhalt zu laden
-  const tempHtmlPath = path.join(markdownPath, data.tempHTMLFile + '_index.html');
-  fs.writeFileSync(tempHtmlPath, htmlContentFull);
 
   const browser = await puppeteer.launch({
-    args: ['--allow-file-access-from-files'], // Wichtig für lokalen Dateizugriff
+    args: ['--allow-file-access-from-files'], // important to access local files (images/css)
     // headless: false,
   });
   const page = await browser.newPage();
 
   // Navigiere zur temporären lokalen HTML-Datei
-  await page.goto(`file://${tempHtmlPath}`, { waitUntil: 'networkidle0' });
+  await page.goto(`file://${partHTMLPath}`, { waitUntil: 'networkidle0' });
 
   await page.pdf({
-    path: outputPath,
+    path: partPDFPath,
     format: 'A4',
     printBackground: true,
     displayHeaderFooter: headerTemplate != undefined || footerTemplate != undefined,
     headerTemplate, // could be empty
     footerTemplate, // could be empty
     margin: {
-      top: data.topMargin,
-      bottom: data.bottomMargin,
-      left: data.leftMargin,
-      right: data.rightMargin,
+      top: docData.topMargin,
+      bottom: docData.bottomMargin,
+      left: docData.leftMargin,
+      right: docData.rightMargin,
     },
   });
   await browser.close();
 
-  if (!data.debug) {
-    fs.unlinkSync(tempHtmlPath); // Temporäre Datei aufräumen
+  if (!docData.debug) {
+    fs.unlinkSync(partHTMLPath); // Temporäre Datei aufräumen
   }
-
-  console.log(`PDF ${outputPath} erstellt!`);
+  docP.partPDFPath = partPDFPath; // store in docPart
+  console.log(`PDF ${partPDFPath} erstellt!`);
 }
 
 /*
@@ -281,6 +405,18 @@ pdfDoc
 async function mergePdfs(first, second, output) {
   const Recipe = muhammara.Recipe;
   const pdfDoc = new Recipe(first, output);
+  return new Promise((resolve, reject) => {
+    try {
+      const pdfPart = pdfDoc.appendPage(second);
+      pdfPart.endPDF(resolve);
+      console.log(`Merging to ${output}.`);
+      // console.log(`Merging\n\t${first}\n\t${second}\n to\n${output} - DONE.`);
+      resolve();
+    } catch (ex) {
+      console.error('Error while merging');
+      console.error(ex);
 
-  await pdfDoc.appendPage(second).endPDF();
+      reject(ex);
+    }
+  });
 }

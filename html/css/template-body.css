@@ -1,72 +1,5 @@
-.titillium-web-extralight {
-  font-family: "Titillium Web", sans-serif;
-  font-weight: 200;
-  font-style: normal;
-}
-
-.titillium-web-light {
-  font-family: "Titillium Web", sans-serif;
-  font-weight: 300;
-  font-style: normal;
-}
-
-.titillium-web-regular {
-  font-family: "Titillium Web", sans-serif;
-  font-weight: 400;
-  font-style: normal;
-}
-
-.titillium-web-semibold {
-  font-family: "Titillium Web", sans-serif;
-  font-weight: 600;
-  font-style: normal;
-}
-
-.titillium-web-bold {
-  font-family: "Titillium Web", sans-serif;
-  font-weight: 700;
-  font-style: normal;
-}
-
-.titillium-web-black {
-  font-family: "Titillium Web", sans-serif;
-  font-weight: 900;
-  font-style: normal;
-}
-
-.titillium-web-extralight-italic {
-  font-family: "Titillium Web", sans-serif;
-  font-weight: 200;
-  font-style: italic;
-}
-
-.titillium-web-light-italic {
-  font-family: "Titillium Web", sans-serif;
-  font-weight: 300;
-  font-style: italic;
-}
-
-.titillium-web-regular-italic {
-  font-family: "Titillium Web", sans-serif;
-  font-weight: 400;
-  font-style: italic;
-}
-
-.titillium-web-semibold-italic {
-  font-family: "Titillium Web", sans-serif;
-  font-weight: 600;
-  font-style: italic;
-}
-
-.titillium-web-bold-italic {
-  font-family: "Titillium Web", sans-serif;
-  font-weight: 700;
-  font-style: italic;
-}
-
-
 body {
-  font-family: 'Titillium Web', sans-serif;
+  font-family: Verdana, Geneva, Tahoma, sans-serif;
   margin: 0;
   padding: 0;
 }
@@ -75,15 +8,12 @@ body {
   font-size: 4rem;
 }
 
-.htl-logo {
-  height: 5rem;
-}
-
 .content {
-  /* Dieser Padding wird durch die Margins der PDF-Generierung überlagert */
+  /* This passing will be changed by the margins of the pdf generation */
   padding: 0;
   /* padding: 1rem; */
 }
+
 /* Basisches Styling für Markdown-Elemente */
 h1,
 h2,
@@ -97,19 +27,21 @@ h6 {
 
 h1 {
   font-size: 2rem;
-  break-before: page;
+  break-before: page; /* page break */
 }
 
 h1.nobreak {
-  break-before: auto;
+  break-before: auto; /* sometimes we dont want the page break */
 }
 
 h2 {
   font-size: 1.5rem;
 }
+
 h3 {
   font-size: 1.2rem;
 }
+
 p {
   margin-bottom: 1rem;
   line-height: 1.5;
@@ -124,7 +56,7 @@ ol {
 
 li {
   break-inside: avoid;
-  margin-bottom: .4rem;
+  margin-bottom: 0.4rem;
 }
 
 pre {
@@ -170,4 +102,8 @@ a:hover {
 
 .center {
   justify-self: center;
+}
+
+.tiny  {
+  font-size: .4rem;
 }
