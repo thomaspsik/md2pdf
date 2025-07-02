@@ -7,15 +7,20 @@ You can also just use mustache templates if you like - you must provide an empty
 
 ## Libraries used:  
 
-* [puppeteer](https://www.npmjs.com/package/puppeteer) -> converts html to pdf by command (puppeteer uses headless chromium in the background)
-
-* [MuhammaraJS](https://www.npmjs.com/package/muhammara) (follow up to hummus) -> a pdf library that allows to combine several pdfs into one pdf
-
 * [markdown-it](https://www.npmjs.com/package/markdown-it) -> converts markdown to html
   * bunch of [markdown-it plugins](https://mdit-plugins.github.io/)
 
-* [mustache.js](https://www.npmjs.com/package/mustache) -> provide data insertion into html templates (like data of generation)
+* [puppeteer](https://www.npmjs.com/package/puppeteer) -> converts html to pdf by command (puppeteer uses headless chromium in the background)
 
+* [mustache.js](https://www.npmjs.com/package/mustache) -> provide data insertion into html templates (like date of generation)
+
+* [MuhammaraJS](https://www.npmjs.com/package/muhammara) (follow up to hummus) -> a pdf library that allows to combine several pdfs into one pdf
+
+## Example
+
+The example provided (see /example) can be generated using
+
+``` npm start example ```
 
 ## The dataflow works like this:
 
@@ -33,8 +38,7 @@ You can also just use mustache templates if you like - you must provide an empty
    * perform string-replacement to get full-paths for includes in html-content "file://[template-path]" => path from root
 
    * save transformed html-content to temporary html-file.
- 
- 
+  
    * if present -> read header html-template and perform mustache 
    * if present -> read footer html-template and perform mustache 
 

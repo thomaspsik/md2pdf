@@ -5,9 +5,8 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "node generate03.js",
-    "withTitle": "node generate04.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node generate.js",
+    "example": "node generate.js example/data.mjs"
   },
   "keywords": [],
   "authors": "Thomas Psik",
