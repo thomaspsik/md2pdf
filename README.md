@@ -1,5 +1,5 @@
 # md2pdf
-Small commandline application that converts markdown files to pdf through puppeteer.
+Commandline application that converts markdown files to pdf through puppeteer.
 
 The dataflow works like this:
  * read markdown file -> 
