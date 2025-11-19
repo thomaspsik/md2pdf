@@ -13,5 +13,9 @@ Hier kommt noch mehr Inhalt.
 console.log("Code-Beispiel");
 `````
 
+@startuml
+Bob -> Alice : hello
+@enduml
+
 Mit freundlichen Grüßen,
 Prof. Psik

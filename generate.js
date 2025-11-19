@@ -17,6 +17,10 @@ import { mark } from '@mdit/plugin-mark';
 //
 import mdAnchor from 'markdown-it-anchor';
 import mdTOC from 'markdown-it-table-of-contents';
+import mdInclude from 'markdown-it-include';
+
+//
+import plantuml from 'markdown-it-plantuml';
 
 // file related
 import { fileURLToPath } from 'url';
@@ -33,6 +37,10 @@ md.use(obsidianImgSize);
 md.use(attrs);
 md.use(mdAnchor);
 md.use(mdTOC);
+md.use(mdInclude);
+
+// plantUml support
+md.use(plantuml);
 
 md.use(embed, {
   config: [
@@ -170,7 +178,8 @@ if (!data.debug) {
         trys++;
         fs.unlinkSync(first.partPDFPath); // remove file
       }
-      for (const docP of docParts) { // loop through other files
+      for (const docP of docParts) {
+        // loop through other files
         if (fs.existsSync(docP.partPDFPath)) {
           trys++;
           fs.unlinkSync(docP.partPDFPath); // remove file
@@ -277,7 +286,7 @@ function checkTemplateByName(docPart, part, mandatoryFlag) {
 
 /**
  * generatePdfFromDocPart performs the generation of the temporary pdf file for the part of the document
- * 
+ *
  * @param {*} docP document part with markdown and html templates
  * @param {*} docData data for mustache and global settings
  */
