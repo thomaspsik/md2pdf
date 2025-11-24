@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 
 // main libraries
 import puppeteer from 'puppeteer';
@@ -63,7 +64,7 @@ md.use(embed, {
 md.use(mark); // "VuePress Theme Hope is ==powerful==."
 
 // Global Variables
-
+let restart = true;
 // --- filename from  ---
 const argv = process.argv;
 
@@ -79,125 +80,149 @@ if (!fs.existsSync(dataFile)) {
 const fulldataFilePath = fs.realpathSync(dataFile);
 
 const impFileName = 'file://' + fulldataFilePath;
-console.log(`Importing metadata from ${impFileName}`);
 const dataFilePath = path.parse(fulldataFilePath).dir; // dir part of the data file // GLOBAL VARIABLE !!!
 
+console.log(`Importing metadata from ${fulldataFilePath}`);
 data = await import(impFileName);
 // console.log(data.default);
 data = data.default; // extract "default" data structure. This allows for javascript to be performed in the data.mjs file
 
-/// collect SVG content
-const svgContent = {};
-const svgContentList = data.SVGContents;
+while (restart) {
+  // TODO Reloader
+  // console.log(`Importing metadata from ${fulldataFilePath}`);
+  // data = await import(fulldataFilePath);
+  // console.log(data.default);
+  // data = data.default; // extract "default" data structure. This allows for javascript to be performed in the data.mjs file
 
-if (!!svgContentList && typeof svgContentList === 'object') {
-  const svgLoader = [];
-  for (const svg of Object.keys(svgContentList)) {
-    svgLoader.push({ name: svg, file: svgContentList[svg] });
+  /// collect SVG content
+  const svgContent = {};
+  const svgContentList = data.SVGContents;
+
+  if (!!svgContentList && typeof svgContentList === 'object') {
+    const svgLoader = [];
+    for (const svg of Object.keys(svgContentList)) {
+      svgLoader.push({ name: svg, file: svgContentList[svg] });
+    }
+
+    // read SVG content
+    console.log(`Reading ${svgLoader.length} SVG Content`);
+    for (const s of svgLoader) {
+      let svgPath = s.file; // absolute path
+      if (!path.isAbsolute(svgPath)) {
+        svgPath = path.join(dataFilePath, s.file); // try relative path
+      }
+      if (!fs.existsSync(svgPath)) {
+        console.log(`Warning: Could not read svg file [${svgPath}] specified in [${fulldataFilePath}].`);
+      }
+      svgContent[s.name] = fs.readFileSync(svgPath).toString('utf-8');
+    }
   }
 
-  // read SVG content
-  console.log(`Reading ${svgLoader.length} SVG Content`);
-  for (const s of svgLoader) {
-    let svgPath = s.file; // absolute path
-    if (!path.isAbsolute(svgPath)) {
-      svgPath = path.join(dataFilePath, s.file); // try relative path
-    }
-    if (!fs.existsSync(svgPath)) {
-      console.log(`Warning: Could not read svg file [${svgPath}] specified in [${fulldataFilePath}].`);
-    }
-    svgContent[s.name] = fs.readFileSync(svgPath).toString('utf-8');
+  // default data for Mustache-Template
+  const docData = {
+    docTitle: 'tempTitle', // should be replaced by data.mjs
+    filesPrefix: 'temp',
+    paperFormat: 'A4',
+    topMargin: '20mm', // default
+    bottomMargin: '25mm', // default
+    leftMargin: '20mm', // default
+    rightMargin: '20mm', // default
+    ...data,
+    // read logo svg to embed in header
+    ...svgContent,
+    currentDate: `${new Date().toLocaleDateString('de-DE')}`,
+  };
+
+  const docParts = data.docParts;
+  if (
+    !docParts ||
+    docParts.length < 1 ||
+    typeof docParts[0].markdownFile != 'string' ||
+    typeof docParts[0].content != 'string'
+  ) {
+    console.error(
+      `You need to specify atlease one docPart in the data [${impFileName}] with markdownFile and content.`,
+    );
+    console.error(
+      `   export default { ..., docParts:[ {markdownFile: "testBody.md", content: "./document-template-body.html"}] `,
+    );
+    process.exit(-2);
   }
-}
 
-// default data for Mustache-Template
-const docData = {
-  docTitle: 'tempTitle', // should be replaced by data.mjs
-  filesPrefix: 'temp',
-  topMargin: '20mm', // default
-  bottomMargin: '25mm', // default
-  leftMargin: '20mm', // default
-  rightMargin: '20mm', // default
-  ...data,
-  // read logo svg to embed in header
-  ...svgContent,
-  currentDate: `${new Date().toLocaleDateString('de-DE')}`,
-};
+  // loop through templates and create temporary pdfs
+  console.log(`Number of document parts: ${docParts.length}`);
 
-const docParts = data.docParts;
-if (
-  !docParts ||
-  docParts.length < 1 ||
-  typeof docParts[0].markdownFile != 'string' ||
-  typeof docParts[0].content != 'string'
-) {
-  console.error(`You need to specify atlease one docPart in the data [${dataFile}] with markdownFile and content.`);
-  console.error(
-    `   export default { ..., docParts:[ {markdownFile: "testBody.md", content: "./document-template-body.html"}] `,
-  );
-  process.exit(-2);
-}
-
-// loop through templates and create temporary pdfs
-console.log(`Number of document parts: ${docParts.length}`);
-
-for (const docP of docParts) {
-  checkMarkdown(docP); // make sure that the markdown file exists
-  checkTemplates(docP); // make sure that the template files exists
-
-  await generatePdfFromDocPart(docP, docData);
-}
-console.log('Merging document parts ...');
-
-// done generating all parts -> join them
-const finalPDFPath = path.join(dataFilePath, docData.docTitle + '.pdf');
-const first = docParts.shift(); // get first and remove
-
-if (docParts.length === 0) {
-  // only 1 pdf -> just move temp to final
-  fs.renameSync(first.partPDFPath, finalPDFPath);
-} else {
-  let start = first.partPDFPath;
   for (const docP of docParts) {
-    await mergePdfs(start, docP.partPDFPath, finalPDFPath);
-    // cleanup temp files
-    start = finalPDFPath;
+    checkMarkdown(docP); // make sure that the markdown file exists
+    checkTemplates(docP); // make sure that the template files exists
+
+    await generatePdfFromDocPart(docP, docData);
   }
-}
-console.log(`Processing file ${finalPDFPath} finished.`);
+  console.log('Merging document parts ...');
 
-// this is really annoing -> joining holds a lock on the files after returning to javascript
-// have to manually loop and wait for the task to release the temp files so they can be deleted.
+  // done generating all parts -> join them
+  const docPartsProcessed = [...docParts]; // create copy
+  const finalPDFPath = path.join(dataFilePath, docData.docTitle + '.pdf');
+  const first = docPartsProcessed.shift(); // get first and remove
 
-if (!data.debug) {
-  let waitForJoin = 5; // max 5*2 seconds
-  while (waitForJoin > 0) {
-    try {
-      let trys = 0;
-      if (fs.existsSync(first.partPDFPath)) {
-        trys++;
-        fs.unlinkSync(first.partPDFPath); // remove file
-      }
-      for (const docP of docParts) {
-        // loop through other files
-        if (fs.existsSync(docP.partPDFPath)) {
-          trys++;
-          fs.unlinkSync(docP.partPDFPath); // remove file
-        }
-      }
-      if (trys === 0) {
-        break; // all have been deleted
-      }
-    } catch (e) {
-      waitForJoin--;
-      // wait 1 sec
-      console.log('Waiting for 2 seconds for join to finish...');
-      await new Promise((r) => setTimeout(r, 2000));
-      // try again ...
+  if (docPartsProcessed.length === 0) {
+    // only 1 pdf -> just move temp to final
+    fs.renameSync(first.partPDFPath, finalPDFPath);
+  } else {
+    let start = first.partPDFPath;
+    for (const docP of docPartsProcessed) {
+      await mergePdfs(start, docP.partPDFPath, finalPDFPath);
+      // cleanup temp files
+      start = finalPDFPath;
     }
   }
-  if (waitForJoin <= 0) {
-    console.log('WARNING: Temporary files could not be removed.');
+  console.log(`Processing file ${finalPDFPath} finished.`);
+
+  // this is really annoing -> joining holds a lock on the files after returning to javascript
+  // have to manually loop and wait for the task to release the temp files so they can be deleted.
+
+  if (!data.debug) {
+    let waitForJoin = 5; // max 5*2 seconds
+    while (waitForJoin > 0) {
+      try {
+        let trys = 0;
+        if (fs.existsSync(first.partPDFPath)) {
+          trys++;
+          fs.unlinkSync(first.partPDFPath); // remove file
+        }
+        for (const docP of docParts) {
+          // loop through other files
+          if (fs.existsSync(docP.partPDFPath)) {
+            trys++;
+            fs.unlinkSync(docP.partPDFPath); // remove file
+          }
+        }
+        if (trys === 0) {
+          break; // all have been deleted
+        }
+      } catch (e) {
+        waitForJoin--;
+        // wait 1 sec
+        console.log('Waiting for 2 seconds for join to finish...');
+        await new Promise((r) => setTimeout(r, 2000));
+        // try again ...
+      }
+    }
+    if (waitForJoin <= 0) {
+      console.log('WARNING: Temporary files could not be removed.');
+    }
+  }
+
+  if (data.openFinishedAndRestart) {
+    console.log('Open final PDF trough OS...');
+    execSync(`${finalPDFPath}`, (error) => {
+      if (error) {
+        console.error(`exec error: ${error}`);
+        return;
+      }
+    });
+  } else {
+    restart = false;
   }
 }
 
@@ -363,7 +388,8 @@ async function generatePdfFromDocPart(docP, docData) {
   // call "pdf" to generate a pdf with puppeteer
   await page.pdf({
     path: partPDFPath,
-    format: 'A4',
+    format: docData.paperFormat, // should be provided in HTML template
+    landscape: docData.paperLandscape,
     printBackground: true,
     displayHeaderFooter: headerTemplate != undefined || footerTemplate != undefined,
     headerTemplate, // could be empty
