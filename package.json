@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node generate.js",
-    "example": "node generate.js example/data.mjs"
+    "example": "node generate.js examples/hello-world/data.mjs",
+    "example-exam": "node generate.js examples/exam-template/data.mjs"
   },
   "keywords": [],
   "authors": "Thomas Psik",
