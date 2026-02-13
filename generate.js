@@ -112,7 +112,9 @@ while (restart) {
         svgPath = path.join(dataFilePath, s.file); // try relative path
       }
       if (!fs.existsSync(svgPath)) {
-        console.log(`Warning: Could not read svg file [${svgPath}] specified in [${fulldataFilePath}].`);
+        console.log(
+          `Warning: Could not read svg file [${svgPath}] specified in [${fulldataFilePath}].`,
+        );
       }
       svgContent[s.name] = fs.readFileSync(svgPath).toString('utf-8');
     }
@@ -155,6 +157,11 @@ while (restart) {
   if (data.restartCB) {
     console.log(`Execute CB function.`);
     data.restartCB();
+  }
+
+  if (data.screenshots) {
+    console.log(`Found screenshots ${data.screenshots.list.length}.`);
+    await genScreenshotList(data.screenshots);
   }
 
   for (const docP of docParts) {
@@ -243,7 +250,9 @@ function checkMarkdown(docPart) {
   let markdownFile = docPart.markdownFile;
 
   if (!markdownFile) {
-    console.error(`You need to specify a markdownFile in the data file [${dataFile}].`);
+    console.error(
+      `You need to specify a markdownFile in the data file [${dataFile}].`,
+    );
     console.error(`   export default {markdownFile: "./test.md", ...} `);
 
     process.exit(-2);
@@ -254,7 +263,9 @@ function checkMarkdown(docPart) {
   }
 
   if (!fs.existsSync(markdownFile)) {
-    console.error(`You need to specify an existing markdownFile in the data file [${dataFile}].`);
+    console.error(
+      `You need to specify an existing markdownFile in the data file [${dataFile}].`,
+    );
     console.error(`Could not find [${markdownFile}].`);
     console.error(`   export default {markdownFile: "./test.md", ...} `);
 
@@ -286,7 +297,9 @@ function checkTemplateByName(docPart, part, mandatoryFlag) {
   let file = docPart[part];
   if (mandatoryFlag) {
     if (!file || typeof file != 'string') {
-      console.error(`You must specify a ${part} in the data file [${dataFile}].`);
+      console.error(
+        `You must specify a ${part} in the data file [${dataFile}].`,
+      );
       console.error(`Could not read property ${part} in:`);
       console.error(JSON.stringify(docPart));
       process.exit(-5);
@@ -303,7 +316,9 @@ function checkTemplateByName(docPart, part, mandatoryFlag) {
   }
 
   if (!fs.existsSync(file)) {
-    console.error(`You need to specify an existing template file in the data file [${dataFile}].`);
+    console.error(
+      `You need to specify an existing template file in the data file [${dataFile}].`,
+    );
     console.error(`Could not find [${file}].`);
 
     process.exit(-2);
@@ -452,5 +467,46 @@ async function mergePdfs(first, second, output) {
 
       reject(ex);
     }
+  });
+}
+
+async function genScreenshotList(screenshots) {
+  // open browser
+  const browser = await puppeteer.launch({
+    args: ['--allow-file-access-from-files'], // important to access local files (images/css)
+    // headless: false,
+  });
+  const page = await browser.newPage();
+
+  // do list of screenshots
+  for (const s of screenshots.list) {
+    const imgPath = path.join(dataFilePath, s.file); // try relative path
+    if (!fs.existsSync(imgPath)) {
+      // generate screenshot
+      await genScreenshot(page, s, imgPath);
+    }
+  }
+
+  // close browser
+  await browser.close();
+}
+
+// function to perfrom screenshot and store image
+async function genScreenshot(page, s, imgPath) {
+  // go to url
+
+  await page.goto(s.url, { waitUntil: 'networkidle0' });
+
+  // change viewport if defined
+  if (s.vp) {
+    await page.setViewport({
+      width: s.vp.width,
+      height: s.vp.height,
+    });
+  }
+
+  // do screenshot
+  await page.screenshot({
+    path: imgPath,
   });
 }
