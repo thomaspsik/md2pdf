@@ -152,6 +152,11 @@ while (restart) {
   // loop through templates and create temporary pdfs
   console.log(`Number of document parts: ${docParts.length}`);
 
+  if (data.restartCB) {
+    console.log(`Execute CB function.`);
+    data.restartCB();
+  }
+
   for (const docP of docParts) {
     checkMarkdown(docP); // make sure that the markdown file exists
     checkTemplates(docP); // make sure that the template files exists
@@ -215,7 +220,7 @@ while (restart) {
 
   if (data.openFinishedAndRestart) {
     console.log('Open final PDF trough OS...');
-    execSync(`${finalPDFPath}`, (error) => {
+    execSync(`"${finalPDFPath}"`, (error) => {
       if (error) {
         console.error(`exec error: ${error}`);
         return;
