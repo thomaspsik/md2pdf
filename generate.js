@@ -7,6 +7,8 @@ import puppeteer from 'puppeteer';
 import MarkdownIt from 'markdown-it'; // Importiere markdown-it
 import Mustache from 'mustache'; // Mustache importieren
 
+import { Monitor } from 'node-screenshots';
+
 // markdown-it plugins
 // https://mdit-plugins.github.io/
 import { attrs } from '@mdit/plugin-attrs';
@@ -411,7 +413,8 @@ async function generatePdfFromDocPart(docP, docData) {
     format: docData.paperFormat, // should be provided in HTML template
     landscape: docData.paperLandscape,
     printBackground: true,
-    displayHeaderFooter: headerTemplate != undefined || footerTemplate != undefined,
+    displayHeaderFooter:
+      headerTemplate != undefined || footerTemplate != undefined,
     headerTemplate, // could be empty
     footerTemplate, // could be empty
     margin: {
@@ -474,16 +477,30 @@ async function genScreenshotList(screenshots) {
   // open browser
   const browser = await puppeteer.launch({
     args: ['--allow-file-access-from-files'], // important to access local files (images/css)
-    // headless: false,
+    headless: screenshots.headless,
   });
-  const page = await browser.newPage();
+  const page = await browser.newPage({ type: 'window' });
 
+  let monitor = null;
+  if (screenshots.mode == 'window') {
+    monitor = Monitor.fromPoint(10, 10);
+  }
   // do list of screenshots
   for (const s of screenshots.list) {
     const imgPath = path.join(dataFilePath, s.file); // try relative path
     if (!fs.existsSync(imgPath)) {
+      console.log(`Performing screenshot for [${s.file}].`);
+
       // generate screenshot
-      await genScreenshot(page, s, imgPath);
+      if (s.mode == 'window') {
+        //  screenshot window
+        await genScreenshotWindow(monitor, browser, page, s, imgPath);
+      } else {
+        // screenshot page
+        await genScreenshot(page, s, imgPath);
+      }
+    } else {
+      console.log(`Skip [${s.file}] file exists.`);
     }
   }
 
@@ -493,11 +510,7 @@ async function genScreenshotList(screenshots) {
 
 // function to perfrom screenshot and store image
 async function genScreenshot(page, s, imgPath) {
-  // go to url
-
-  await page.goto(s.url, { waitUntil: 'networkidle0' });
-
-  // change viewport if defined
+  // change viewport if defined (first)
   if (s.vp) {
     await page.setViewport({
       width: s.vp.width,
@@ -505,8 +518,97 @@ async function genScreenshot(page, s, imgPath) {
     });
   }
 
+  // go to page and do stuff on page
+  await doPage(page, s)
+
   // do screenshot
   await page.screenshot({
     path: imgPath,
   });
+}
+
+// function to perfrom screenshot and store image
+async function genScreenshotWindow(monitor, browser, page, s, imgPath) {
+  const windowId = await page.windowId();
+
+  if (!s.window) {
+    console.error("You need to specify window - if mode 'window' is selected for screenshot.")
+  }
+  await browser.setWindowBounds(windowId, s.window);
+
+  // change viewport if defined
+  if (s.vp) {
+    await page.setViewport({
+      width: s.vp.width,
+      height: s.vp.height,
+    });
+  } else {
+    await page.setViewport(null);
+  }
+
+  // go to page and do stuff on page
+  await doPage(page, s);
+
+  // do screenshot
+  let image = monitor.captureImageSync();
+  if (s.crop) {
+    image = image.cropSync(
+      s.crop.left,
+      s.crop.top,
+      s.crop.width,
+      s.crop.height,
+    );
+  }
+  // fs.writeFileSync(path.join(dataFilePath, 'uncrop'+s.file), image.toPngSync());
+
+  fs.writeFileSync(imgPath, image.toPngSync());
+}
+
+async function doPage(page, s) {
+   // go to url
+  await page.goto(s.url, { waitUntil: 'networkidle0' });
+
+  // scroll if specified
+  await doScroll(page, s);
+
+  // perform inputs if specified
+  await doInput(page, s);
+  
+  // wait for async images to load if specified
+  await doDelay(s.delay);
+}
+
+
+async function doInput(page, s) {
+  if (!s.input) {
+    return;
+  }
+  for (const inp of s.input) {
+    if (inp.target) {
+      await page.type(inp.target, inp.value, { delay: inp.delay });
+    } else if (inp.keypress) {
+      await page.keyboard.press(inp.keypress);
+      await doDelay(inp.delay);
+    } else if (inp.click) {
+      await page.click(inp.click);
+      await doDelay(inp.delay);
+    }
+  }
+}
+
+async function doDelay(delay) {
+  if (delay) {
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+}
+
+async function doScroll(page, s) {
+  // to scrolling
+  if (s.scroll) {
+    // Locating the target element using a selector
+    const targetElement = await page.$(s.scroll.target);
+
+    // Scrolling the target element into view
+    await targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 }
